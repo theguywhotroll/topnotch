@@ -6,12 +6,16 @@
   <key>CFBundleName</key><string>TopNotch</string>
   <key>CFBundleDisplayName</key><string>TopNotch</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.2.0</string>
-  <key>CFBundleVersion</key><string>3</string>
+  <key>CFBundleShortVersionString</key><string>0.4.0</string>
+  <key>CFBundleVersion</key><string>5</string>
+  <key>NSBluetoothAlwaysUsageDescription</key><string>TopNotch shows when your paired audio devices connect or disconnect.</string>
+  <key>NSLocationUsageDescription</key><string>TopNotch uses your approximate location to show local weather when you enable it.</string>
+  <key>NSLocationWhenInUseUsageDescription</key><string>TopNotch uses your approximate location to show local weather when you enable it.</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>LSMinimumSystemVersion</key><string>15.0</string>
   <key>LSUIElement</key><true/>
   <key>NSCalendarsFullAccessUsageDescription</key><string>TopNotch shows your upcoming events in the notch.</string>
   <key>NSAppleEventsUsageDescription</key><string>TopNotch reads and controls playback in Music or Spotify when you choose to use media controls.</string>
+  <key>NSFocusStatusUsageDescription</key><string>TopNotch shows when Focus turns on or off if you enable Focus alerts.</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
 </dict></plist>
