@@ -2,9 +2,9 @@
 import PackageDescription
 
 let package = Package(
-    name: "Alcove",
+    name: "TopNotch",
     platforms: [.macOS(.v15)],
-    products: [.executable(name: "Alcove", targets: ["Alcove"])],
-    targets: [.executableTarget(name: "Alcove", path: "Sources/Alcove")],
+    products: [.executable(name: "TopNotch", targets: ["TopNotch"])],
+    targets: [.executableTarget(name: "TopNotch", path: "Sources/TopNotch")],
     swiftLanguageModes: [.v5]
 )

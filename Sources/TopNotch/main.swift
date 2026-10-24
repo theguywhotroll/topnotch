@@ -8,7 +8,7 @@ final class NotchPanel: NSPanel {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let model = AlcoveModel()
+    private let model = TopNotchModel()
     private var statusItem: NSStatusItem!
     private var panels: [NotchPanel] = []
     private var settingsWindow: NSWindow?
@@ -19,12 +19,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "circle.hexagongrid", accessibilityDescription: "Alcove")
+        statusItem.button?.image = NSImage(systemSymbolName: "chevron.up", accessibilityDescription: "TopNotch")
         let menu = NSMenu()
-        menu.addItem(withTitle: "Open Alcove", action: #selector(togglePanel), keyEquivalent: "o").target = self
+        menu.addItem(withTitle: "Open TopNotch", action: #selector(togglePanel), keyEquivalent: "o").target = self
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(withTitle: "Quit Alcove", action: #selector(quit), keyEquivalent: "q").target = self
+        menu.addItem(withTitle: "Quit TopNotch", action: #selector(quit), keyEquivalent: "q").target = self
         statusItem.menu = menu
 
         model.onExpansionChange = { [weak self] in self?.layoutPanels() }
@@ -106,7 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openSettings() {
         if settingsWindow == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 490, height: 360), styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
-            window.title = "Alcove Settings"
+            window.title = "TopNotch Settings"
             window.center()
             window.contentView = NSHostingView(rootView: SettingsView(model: model))
             settingsWindow = window

@@ -3,7 +3,7 @@ import Combine
 import EventKit
 
 @MainActor
-final class AlcoveModel: ObservableObject {
+final class TopNotchModel: ObservableObject {
     @Published var expanded = false { didSet { onExpansionChange?() } }
     @Published var track: PlayingTrack?
     @Published var batteryPercent: Int?

@@ -1,6 +1,6 @@
-# Alcove prototype
+# TopNotch
 
-A small native macOS notch app built from the static observations in [ALCOVE_REVERSE_ENGINEERING.md](ALCOVE_REVERSE_ENGINEERING.md). This is an independent prototype, not the original Alcove app or its source code.
+A small native macOS notch app using the supplied `logo.png` as its app icon. The original [Alcove analysis](ALCOVE_REVERSE_ENGINEERING.md) informed this independent prototype; this is not the original application's source code.
 
 ## What works
 
@@ -19,10 +19,10 @@ Requires macOS 15 or newer and Apple Swift command-line tools. Full Xcode is not
 
 ```sh
 ./scripts/build-app.sh
-open dist/Alcove.app
+open dist/TopNotch.app
 ```
 
-The build script creates an ad-hoc signed `dist/Alcove.app`. macOS may ask for Automation and Calendar permissions when those features are used. For distribution to other Macs without Gatekeeper warnings, sign and notarize it with your own Apple Developer ID.
+The build script creates an ad-hoc signed `dist/TopNotch.app`. macOS may ask for Automation and Calendar permissions when those features are used. For distribution to other Macs without Gatekeeper warnings, sign and notarize it with your own Apple Developer ID.
 
 ## Privacy
 

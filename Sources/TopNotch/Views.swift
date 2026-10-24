@@ -8,7 +8,7 @@ private enum Palette {
 }
 
 struct NotchView: View {
-    @ObservedObject var model: AlcoveModel
+    @ObservedObject var model: TopNotchModel
     let openSettings: () -> Void
 
     var body: some View {
@@ -35,7 +35,7 @@ struct NotchView: View {
                 Image(systemName: model.track?.isPlaying == true ? "waveform" : "sparkle")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Palette.accent)
-                Text(model.track?.title ?? "Alcove")
+                Text(model.track?.title ?? "TopNotch")
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
                 Spacer(minLength: 2)
@@ -53,13 +53,13 @@ struct NotchView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Open Alcove")
+        .accessibilityLabel("Open TopNotch")
     }
 
     private var expandedView: some View {
         VStack(alignment: .leading, spacing: 13) {
             HStack {
-                Text("ALCOVE")
+                Text("TOPNOTCH")
                     .font(.system(size: 10, weight: .heavy, design: .rounded))
                     .tracking(2.4)
                     .foregroundStyle(Palette.muted)
@@ -67,7 +67,7 @@ struct NotchView: View {
                 Button(action: openSettings) { Image(systemName: "gearshape") }
                     .accessibilityLabel("Open settings")
                 Button { model.expanded = false } label: { Image(systemName: "chevron.up") }
-                    .accessibilityLabel("Close Alcove")
+                    .accessibilityLabel("Close TopNotch")
             }
             .buttonStyle(.plain)
             .foregroundStyle(Palette.muted)
@@ -140,12 +140,12 @@ struct NotchView: View {
 }
 
 struct SettingsView: View {
-    @ObservedObject var model: AlcoveModel
+    @ObservedObject var model: TopNotchModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 5) {
-                Text("Alcove").font(.system(size: 30, weight: .semibold))
+                Text("TopNotch").font(.system(size: 30, weight: .semibold))
                 Text("A quiet space around your Mac’s notch.")
                     .foregroundStyle(.secondary)
             }
@@ -172,7 +172,7 @@ struct SettingsView: View {
                 .padding(8)
             }
             Spacer()
-            Text("Open source recreation · v0.1.1")
+            Text("Open source recreation · v0.2.0")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
