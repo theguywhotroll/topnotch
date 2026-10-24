@@ -13,6 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panels: [NotchPanel] = []
     private var settingsWindow: NSWindow?
     private var refreshTimer: Timer?
+    private var hoverTimer: Timer?
+    private var hoverExitDeadline: Date?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -32,11 +34,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.model.refresh() }
         }
+        hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.collapseWhenPointerLeaves() }
+        }
     }
 
-    func applicationWillTerminate(_ notification: Notification) { refreshTimer?.invalidate() }
+    func applicationWillTerminate(_ notification: Notification) {
+        refreshTimer?.invalidate()
+        hoverTimer?.invalidate()
+    }
 
-    @objc private func togglePanel() { model.expanded.toggle() }
+    @objc private func togglePanel() {
+        model.expanded.toggle()
+        if model.expanded { hoverExitDeadline = Date().addingTimeInterval(2) }
+    }
     @objc private func quit() { NSApp.terminate(nil) }
 
     @objc private func rebuildPanels() {
@@ -64,6 +75,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let screens = model.showOnAllDisplays ? NSScreen.screens : [NSScreen.main ?? NSScreen.screens[0]]
         for (panel, screen) in zip(panels, screens) { position(panel, on: screen) }
+    }
+
+    private func collapseWhenPointerLeaves() {
+        guard model.expanded else {
+            hoverExitDeadline = nil
+            return
+        }
+        let pointer = NSEvent.mouseLocation
+        let hovering = panels.contains { $0.frame.insetBy(dx: -8, dy: -8).contains(pointer) }
+        if hovering {
+            hoverExitDeadline = nil
+        } else if let deadline = hoverExitDeadline {
+            if Date() >= deadline {
+                model.expanded = false
+                hoverExitDeadline = nil
+            }
+        } else {
+            hoverExitDeadline = Date().addingTimeInterval(0.45)
+        }
     }
 
     private func position(_ panel: NotchPanel, on screen: NSScreen) {

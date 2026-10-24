@@ -22,7 +22,7 @@ struct NotchView: View {
                 .strokeBorder(.white.opacity(0.12), lineWidth: 1)
         }
         .onHover { hovering in
-            if model.expandOnHover { model.expanded = hovering }
+            if hovering && model.expandOnHover { model.expanded = true }
         }
         .accessibilityElement(children: .contain)
     }
@@ -172,7 +172,7 @@ struct SettingsView: View {
                 .padding(8)
             }
             Spacer()
-            Text("Open source recreation · v0.1.0")
+            Text("Open source recreation · v0.1.1")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

@@ -4,7 +4,7 @@ A small native macOS notch app built from the static observations in [ALCOVE_REV
 
 ## What works
 
-- A compact panel centered at the top of the display. Click it to expand; hover expansion is optional.
+- A compact panel centered at the top of the display. Click it to expand; hover expansion is optional. The expanded panel closes automatically shortly after the pointer leaves it.
 - A menu bar item with Open, Settings, and Quit actions.
 - Current track and play/pause/skip controls for a running Apple Music or Spotify app, using macOS Automation permission.
 - Mac battery percentage and charging status.
