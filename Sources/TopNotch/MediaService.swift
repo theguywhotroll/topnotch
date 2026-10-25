@@ -48,6 +48,7 @@ enum MediaCommand {
 }
 
 /// Publishes the current track from the system now-playing source or from Music/Spotify directly.
+/// The system source also covers browsers, so it runs alongside Music or Spotify when one is preferred.
 @MainActor
 final class NowPlayingController {
     var onChange: ((NowPlaying?) -> Void)?
@@ -59,6 +60,11 @@ final class NowPlayingController {
     private var bridgeOutput: FileHandle?
     private var bridgeBuffer = Data()
     private var bridgeRestarts = 0
+    private var bridgeTimeout: Timer?
+    private var bridgeResponded = false
+    private var bridgeTrack: NowPlaying?
+    private var polledTrack: NowPlaying?
+    private var currentIsFromBridge = false
     private var pollTimer: Timer?
     private let scriptQueue = DispatchQueue(label: "topnotch.applescript")
     private var artworkTrackID: String?
@@ -70,12 +76,22 @@ final class NowPlayingController {
         self.app = app
         stop()
         guard enabled else { return publish(nil) }
-        if app == .system, startBridge() { return }
-        startPolling()
+        bridgeRestarts = 0
+        let bridgeStarted = startBridge()
+        if app != .system || !bridgeStarted { startPolling() }
+        guard app == .system, bridgeStarted else { return }
+        // MediaRemote can start successfully yet never answer on some macOS
+        // releases. Fall back to Music and Spotify if it stays silent.
+        bridgeTimeout = Timer.scheduledTimer(withTimeInterval: 4, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.enabled, self.app == .system, !self.bridgeResponded, self.pollTimer == nil else { return }
+                self.startPolling()
+            }
+        }
     }
 
     func send(_ command: MediaCommand) {
-        if bridge != nil {
+        if currentIsFromBridge || (current == nil && pollTimer == nil), bridge != nil {
             write("c \(command.remoteValue)")
             return
         }
@@ -85,7 +101,7 @@ final class NowPlayingController {
     }
 
     func seek(to seconds: Double) {
-        if bridge != nil {
+        if currentIsFromBridge, bridge != nil {
             write("s \(seconds)")
         } else if let source = scriptSource {
             scriptQueue.async { AppleScriptMedia.seek(seconds, source: source) }
@@ -93,13 +109,15 @@ final class NowPlayingController {
         if var track = current {
             track.elapsed = seconds
             track.timestamp = Date()
-            publish(track)
+            publish(track, fromBridge: currentIsFromBridge)
         }
     }
 
     func stop() {
         pollTimer?.invalidate()
         pollTimer = nil
+        bridgeTimeout?.invalidate()
+        bridgeTimeout = nil
         bridgeOutput?.readabilityHandler = nil
         bridgeOutput = nil
         bridgeInput?.closeFile()
@@ -108,24 +126,44 @@ final class NowPlayingController {
         bridge = nil
         bridgeInput = nil
         bridgeBuffer.removeAll()
+        bridgeResponded = false
+        bridgeTrack = nil
+        polledTrack = nil
     }
 
     private var scriptSource: AppleScriptMedia.Source? {
-        switch app {
-        case .spotify: .spotify
-        case .music: .music
-        case .system:
-            switch current?.bundleID {
-            case "com.spotify.client": .spotify
-            case "com.apple.Music": .music
-            default: nil
+        switch current?.bundleID {
+        case "com.spotify.client": .spotify
+        case "com.apple.Music": .music
+        default:
+            switch app {
+            case .spotify: .spotify
+            case .music: .music
+            case .system: nil
             }
         }
     }
 
-    private func publish(_ track: NowPlaying?) {
+    private func publish(_ track: NowPlaying?, fromBridge: Bool = false) {
         current = track
+        currentIsFromBridge = track != nil && fromBridge
         onChange?(track)
+    }
+
+    /// Picks between the preferred app and everything else (browsers, podcasts…):
+    /// whichever is playing wins, with the preferred app breaking ties.
+    private func update() {
+        let polled = pollTimer != nil ? polledTrack : nil
+        let system = bridge != nil ? bridgeTrack : nil
+        if app == .system, bridgeResponded, bridge != nil {
+            return publish(system, fromBridge: true)
+        }
+        if let polled, polled.isPlaying { return publish(polled) }
+        if let system, system.isPlaying { return publish(system, fromBridge: true) }
+        // Nothing is playing: stay on the source already shown so pausing a browser doesn't swap tracks.
+        if currentIsFromBridge, let system { return publish(system, fromBridge: true) }
+        if let polled { return publish(polled) }
+        publish(system, fromBridge: system != nil)
     }
 
     // MARK: System source
@@ -168,14 +206,16 @@ final class NowPlayingController {
         bridgeOutput = nil
         bridge = nil
         bridgeInput = nil
-        guard enabled, app == .system else { return }
+        bridgeTrack = nil
+        guard enabled else { return }
+        update()
         bridgeRestarts += 1
         if bridgeRestarts <= 3 {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-                guard let self, self.enabled, self.app == .system, self.bridge == nil else { return }
-                if !self.startBridge() { self.startPolling() }
+                guard let self, self.enabled, self.bridge == nil else { return }
+                if !self.startBridge(), self.pollTimer == nil { self.startPolling() }
             }
-        } else {
+        } else if pollTimer == nil {
             startPolling()
         }
     }
@@ -192,7 +232,19 @@ final class NowPlayingController {
             bridgeBuffer.removeSubrange(bridgeBuffer.startIndex...newline)
             guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
             bridgeRestarts = 0
-            publish(Self.track(from: object, previous: current))
+            if !bridgeResponded {
+                bridgeResponded = true
+                bridgeTimeout?.invalidate()
+                bridgeTimeout = nil
+                // The bridge works, so the system source no longer needs the AppleScript fallback.
+                if app == .system {
+                    pollTimer?.invalidate()
+                    pollTimer = nil
+                    polledTrack = nil
+                }
+            }
+            bridgeTrack = Self.track(from: object, previous: bridgeTrack)
+            update()
         }
     }
 
@@ -255,12 +307,15 @@ final class NowPlayingController {
             }
             DispatchQueue.main.async {
                 guard let self, self.pollTimer != nil else { return }
-                guard let (snapshot, source) = result else { return self.publish(nil) }
+                guard let (snapshot, source) = result else {
+                    self.polledTrack = nil
+                    return self.update()
+                }
                 if snapshot.id != self.artworkTrackID {
                     self.artworkTrackID = snapshot.id
                     self.artworkImage = artwork
                 }
-                self.publish(NowPlaying(
+                self.polledTrack = NowPlaying(
                     id: snapshot.id,
                     title: snapshot.title,
                     artist: snapshot.artist,
@@ -272,7 +327,8 @@ final class NowPlayingController {
                     bundleID: source.bundleID,
                     artwork: self.artworkImage,
                     link: snapshot.link
-                ))
+                )
+                self.update()
             }
         }
     }

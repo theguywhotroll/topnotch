@@ -83,6 +83,8 @@ final class TopNotchModel: ObservableObject {
     @Published private(set) var track: NowPlaying?
     @Published private(set) var trackTint: Color = .white
     @Published private(set) var trackSecondaryTint: Color = .white
+    /// The artwork color darkened enough to read on the light expanded panel.
+    @Published private(set) var trackTintOnLight: Color = .primary
     @Published private(set) var trackChangeCount = 0
     @Published private(set) var battery: BatteryService.Reading?
     @Published private(set) var lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
@@ -431,7 +433,7 @@ final class TopNotchModel: ObservableObject {
         refreshBattery()
         refreshDevices()
         refreshFocus()
-        accessibilityGranted = Permissions.accessibility
+        assign(\.accessibilityGranted, Permissions.accessibility)
         if prefs.replaceSystemHUD, !keyTap.isRunning, accessibilityGranted { updateKeyTap() }
 
         let today = Calendar.current.startOfDay(for: clock)
@@ -446,11 +448,11 @@ final class TopNotchModel: ObservableObject {
     /// Polls volume and brightness so changes made outside TopNotch still show a HUD.
     func refreshFast() {
         let device = AudioOutput.defaultDevice()
-        outputDeviceName = device?.name
+        assign(\.outputDeviceName, device?.name)
         let currentVolume = device.flatMap { AudioOutput.volume($0.id) }
         let currentMuted = device.map { AudioOutput.isMuted($0.id) } ?? false
-        volume = currentVolume
-        muted = currentMuted
+        assign(\.volume, currentVolume)
+        assign(\.muted, currentMuted)
         if device?.id == previousOutputID, let previousVolume, let currentVolume,
            abs(previousVolume - currentVolume) > 0.001 || previousMuted != currentMuted {
             showVolumeHUD(device: device)
@@ -460,16 +462,22 @@ final class TopNotchModel: ObservableObject {
         previousMuted = currentMuted
 
         let currentBrightness = BrightnessService.brightness()
-        brightness = currentBrightness
+        assign(\.brightness, currentBrightness)
         if let previousBrightness, let currentBrightness, abs(previousBrightness - currentBrightness) > 0.03 {
             showBrightnessHUD()
         }
         previousBrightness = currentBrightness
     }
 
+    /// Assigns only when the value changed. Polls run several times a second, and every
+    /// write to a published property redraws the notch even when nothing is different.
+    private func assign<Value: Equatable>(_ keyPath: ReferenceWritableKeyPath<TopNotchModel, Value>, _ value: Value) {
+        if self[keyPath: keyPath] != value { self[keyPath: keyPath] = value }
+    }
+
     private func refreshBattery() {
         guard let reading = BatteryService.reading() else { return }
-        battery = reading
+        assign(\.battery, reading)
         defer { previousBattery = reading }
         guard prefs.enableBattery, let previous = previousBattery else { return }
         let percentText = prefs.hideBatteryPercentage ? nil : "\(reading.percent)%"
@@ -494,7 +502,7 @@ final class TopNotchModel: ObservableObject {
 
     private func refreshDevices() {
         let current = BluetoothService.connectedDevices()
-        devices = current
+        assign(\.devices, current)
         defer { previousDevices = current }
         guard prefs.enableConnectivity, let previous = previousDevices else { return }
         if let added = current.first(where: { device in !previous.contains { $0.address == device.address } }) {
@@ -509,7 +517,7 @@ final class TopNotchModel: ObservableObject {
 
     private func refreshFocus() {
         let current = FocusService.current()
-        focus = current
+        assign(\.focus, current)
         defer { previousFocus = current }
         guard prefs.enableFocus, let current, let previous = previousFocus, current.active != previous.active || current.name != previous.name else { return }
         let shown = current.active ? current : previous
@@ -654,9 +662,13 @@ final class TopNotchModel: ObservableObject {
         if let average {
             var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
             average.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+            trackTintOnLight = saturation < 0.12
+                ? .primary
+                : Color(nsColor: NSColor(hue: hue, saturation: max(saturation, 0.55), brightness: min(brightness, 0.6), alpha: 1))
             trackSecondaryTint = Color(nsColor: NSColor(hue: (hue + 0.12).truncatingRemainder(dividingBy: 1), saturation: saturation, brightness: brightness, alpha: 1))
         } else {
             trackSecondaryTint = .white
+            trackTintOnLight = .primary
         }
     }
 
@@ -669,6 +681,15 @@ final class TopNotchModel: ObservableObject {
         case .artwork, .gradient: trackTint
         case .color: .accentColor
         case .mono: .white
+        }
+    }
+
+    func mediaTint(for scheme: ColorScheme) -> Color {
+        guard scheme == .light else { return mediaTint }
+        switch prefs.mediaColorStyle {
+        case .artwork, .gradient: return trackTintOnLight
+        case .color: return .accentColor
+        case .mono: return .primary
         }
     }
 

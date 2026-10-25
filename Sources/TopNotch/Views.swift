@@ -1,9 +1,31 @@
 import SwiftUI
 
+/// Colors derived from `.primary`, so they suit both the black notch and the light expanded panel.
 enum Palette {
-    static let muted = Color.white.opacity(0.55)
-    static let faint = Color.white.opacity(0.14)
-    static let surface = Color.white.opacity(0.08)
+    static let muted = Color.primary.opacity(0.55)
+    static let faint = Color.primary.opacity(0.14)
+    static let surface = Color.primary.opacity(0.08)
+}
+
+/// Opening grows with a little overshoot; closing settles without one, like Alcove.
+enum NotchMotion {
+    static let open = Animation.spring(response: 0.46, dampingFraction: 0.76)
+    static let close = Animation.spring(response: 0.36, dampingFraction: 0.92)
+    static let content = Animation.spring(response: 0.34, dampingFraction: 0.9)
+}
+
+/// A blur of whatever is behind the panel, used for the light expanded notch.
+struct FrostedBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .popover
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.appearance = NSAppearance(named: .aqua)
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
 }
 
 /// The notch silhouette: concave curves where it meets the top edge and rounded lower corners.
@@ -54,16 +76,23 @@ extension TopNotchModel {
 
 struct NotchRootView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The system appearance; the panel itself never forces one.
+    @Environment(\.colorScheme) private var systemScheme
     @ObservedObject var model: TopNotchModel
     @ObservedObject var panel: PanelContext
 
     var body: some View {
         let size = model.shapeSize(on: panel)
         let expanded = model.isExpanded(on: panel)
+        // The closed notch stays black to match the hardware; only the open panel follows Light mode.
+        let light = expanded && systemScheme == .light
         let shape = NotchShape(topRadius: model.topRadius(on: panel), bottomRadius: expanded ? 26 : min(size.height / 2.4, 14))
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
-                shape.fill(Color.black)
+                if systemScheme == .light {
+                    FrostedBackground()
+                }
+                Color.black.opacity(light ? 0 : 1)
                 content
                     .padding(.horizontal, model.topRadius(on: panel))
             }
@@ -72,9 +101,16 @@ struct NotchRootView: View {
             .overlay {
                 if model.prefs.contrastOutline, size.height > 0 {
                     shape.stroke(Color.white.opacity(0.22), lineWidth: 1)
+                } else if light {
+                    shape.stroke(Color.black.opacity(0.08), lineWidth: 0.5)
                 }
             }
-            .shadow(color: .black.opacity(expanded ? 0.45 : 0), radius: 18, y: 6)
+            // Shadowing just the outline is far cheaper than shadowing the clipped content every frame.
+            .background {
+                shape.fill(light ? Color.white : Color.black)
+                    .frame(width: size.width, height: size.height)
+                    .shadow(color: .black.opacity(expanded ? (light ? 0.22 : 0.45) : 0), radius: 18, y: 6)
+            }
             .contentShape(shape)
             .onTapGesture {
                 if !expanded {
@@ -83,13 +119,13 @@ struct NotchRootView: View {
                 }
             }
             .contextMenu { NotchMenu(model: model) }
-            .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.78), value: size)
-            .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.78), value: expanded)
+            .animation(reduceMotion ? nil : expanded ? NotchMotion.open : NotchMotion.close, value: size)
+            .animation(reduceMotion ? nil : expanded ? NotchMotion.open : NotchMotion.close, value: expanded)
+            .animation(reduceMotion ? nil : NotchMotion.content, value: model.alert?.id)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .foregroundStyle(.white)
-        .preferredColorScheme(.dark)
+        .environment(\.colorScheme, .dark)
     }
 
     @ViewBuilder
@@ -97,7 +133,12 @@ struct NotchRootView: View {
         let notch = panel.geometry
         if model.isExpanded(on: panel) {
             ExpandedView(model: model, notch: notch)
-                .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
+                .environment(\.colorScheme, systemScheme)
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .scale(scale: 0.9, anchor: .top)).combined(with: AnyTransition(.blurReplace))
+                        .animation(NotchMotion.content.delay(0.06)),
+                    removal: .opacity.combined(with: .scale(scale: 0.96, anchor: .top)).animation(.easeOut(duration: 0.14))
+                ))
         } else if let alert = model.alert, !panel.hidden {
             Group {
                 if alert.style == .peek {
@@ -363,14 +404,14 @@ struct BatteryGlyph: View {
     var body: some View {
         HStack(spacing: 1) {
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 3).stroke(Color.white.opacity(0.4), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 3).stroke(Color.primary.opacity(0.4), lineWidth: 1)
                 RoundedRectangle(cornerRadius: 1.5)
-                    .fill(charging ? Color.green : low ? Color.red : Color.white)
+                    .fill(charging ? Color.green : low ? Color.red : Color.primary)
                     .frame(width: max(2, 18 * CGFloat(min(max(level, 0), 100)) / 100))
                     .padding(2)
             }
             .frame(width: 24, height: 11)
-            RoundedRectangle(cornerRadius: 1).fill(Color.white.opacity(0.4)).frame(width: 1.5, height: 4)
+            RoundedRectangle(cornerRadius: 1).fill(Color.primary.opacity(0.4)).frame(width: 1.5, height: 4)
         }
         .accessibilityLabel("Battery \(level) percent\(charging ? ", charging" : "")")
     }
@@ -415,7 +456,7 @@ struct PeekView: View {
 }
 
 struct PillButtonStyle: ButtonStyle {
-    var tint: Color = .white
+    var tint: Color = .primary
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -423,7 +464,7 @@ struct PillButtonStyle: ButtonStyle {
             .padding(.horizontal, 11)
             .padding(.vertical, 5)
             .background(tint.opacity(configuration.isPressed ? 0.35 : 0.22), in: Capsule())
-            .foregroundStyle(.white)
+            .foregroundStyle(.primary)
     }
 }
 
@@ -473,7 +514,7 @@ struct ExpandedView: View {
                 Button { model.tab = tab } label: {
                     Image(systemName: tab.symbol)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(model.tab == tab ? Color.white : Palette.muted)
+                        .foregroundStyle(model.tab == tab ? Color.primary : Palette.muted)
                         .frame(width: 18, height: 18)
                 }
                 .buttonStyle(IconButtonStyle())
@@ -503,6 +544,7 @@ struct ExpandedView: View {
 }
 
 struct MediaPanel: View {
+    @Environment(\.colorScheme) private var scheme
     @ObservedObject var model: TopNotchModel
     let compact: Bool
 
@@ -528,7 +570,7 @@ struct MediaPanel: View {
                 if let track = model.track, track.duration != nil {
                     Scrubber(model: model, track: track)
                 } else if model.track != nil {
-                    Text("Live").font(.system(size: 10, weight: .bold)).foregroundStyle(model.mediaTint)
+                    Text("Live").font(.system(size: 10, weight: .bold)).foregroundStyle(model.mediaTint(for: scheme))
                 }
                 controls
             }
@@ -574,6 +616,7 @@ struct MediaPanel: View {
 }
 
 struct Scrubber: View {
+    @Environment(\.colorScheme) private var scheme
     @ObservedObject var model: TopNotchModel
     let track: NowPlaying
     @State private var dragFraction: Double?
@@ -588,7 +631,7 @@ struct Scrubber: View {
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         Capsule().fill(Palette.faint)
-                        Capsule().fill(model.mediaTint)
+                        Capsule().fill(model.mediaTint(for: scheme))
                             .frame(width: geometry.size.width * min(max(fraction, 0), 1))
                     }
                     .frame(height: dragFraction == nil ? 4 : 6)

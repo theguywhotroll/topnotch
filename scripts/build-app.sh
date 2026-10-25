@@ -19,6 +19,15 @@ for size in 16 32 128 256 512; do
   sips -z "$doubled" "$doubled" logo.png --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
 done
 iconutil -c icns "$iconset" -o dist/TopNotch.app/Contents/Resources/AppIcon.icns
-codesign --force --sign - dist/TopNotch.app/Contents/Resources/libTopNotchMedia.dylib
-codesign --force --sign - dist/TopNotch.app
+# A stable identity keeps macOS permissions (Accessibility) across rebuilds; ad-hoc
+# signatures change every build. The keychain only holds this self-signed identity.
+identity=-
+keychain=~/Library/Keychains/topnotch-signing.keychain-db
+sign_args=()
+if [[ -f $keychain ]] && security unlock-keychain -p topnotch-local "$keychain" 2>/dev/null; then
+  identity="TopNotch Local Signing"
+  sign_args=(--keychain "$keychain")
+fi
+codesign --force --sign "$identity" "${sign_args[@]}" dist/TopNotch.app/Contents/Resources/libTopNotchMedia.dylib
+codesign --force --sign "$identity" "${sign_args[@]}" dist/TopNotch.app
 echo "Built ${PWD}/dist/TopNotch.app"

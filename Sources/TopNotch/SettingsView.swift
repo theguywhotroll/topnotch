@@ -453,7 +453,7 @@ struct NowPlayingSettings: View {
             } footer: {
                 Text(prefs.musicApp == .system
                      ? "System follows whatever is playing, including browsers and podcast apps."
-                     : "macOS asks for Automation permission the first time TopNotch reads or controls \(prefs.musicApp.title).")
+                     : "\(prefs.musicApp.title) takes priority; browsers and other apps show when \(prefs.musicApp.title) isn't playing. macOS asks for Automation permission the first time TopNotch reads or controls \(prefs.musicApp.title).")
             }
             Section("Appearance") {
                 Picker("Color", selection: $prefs.mediaColorStyle) {
